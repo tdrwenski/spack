@@ -199,13 +199,23 @@ class CachedCMakeBuilder(CMakeBuilder):
         if hasattr(spec["mpi"], "mpifc"):
             entries.append(cmake_cache_path("MPI_Fortran_COMPILER", spec["mpi"].mpifc))
 
-        # Check for srun
+        # Check for slurm
+        slurm_checks = ["+slurm", "schedulers=slurm", "process_managers=slurm"]
+        using_slurm = any(spec["mpi"].satisfies(variant) for variant in slurm_checks)
+
         srun_exec = which_string("srun")
-        using_srun = srun_exec is not None
+        flux_exec = which_string("flux")
+        has_srun = srun_exec is not None
+        has_flux = flux_exec is not None
+
+        prefer_srun_over_flux = not has_flux or srun_exec == "/usr/bin/srun"
+        using_srun = has_srun and (using_slurm or prefer_srun_over_flux)
 
         # Determine MPIEXEC
         if using_srun:
             mpiexec = srun_exec
+        elif has_flux:
+            mpiexec = flux_exec
         elif hasattr(spec["mpi"].package, "mpiexec"):
             mpiexec = spec["mpi"].package.mpiexec
         else:
@@ -227,6 +237,9 @@ class CachedCMakeBuilder(CMakeBuilder):
 
         # Determine MPIEXEC_NUMPROC_FLAG
         if using_srun:
+            entries.append(cmake_cache_string("MPIEXEC_NUMPROC_FLAG", "-n"))
+        elif has_flux:
+            entries.append(cmake_cache_string("MPIEXEC_PREFLAGS", "run"))
             entries.append(cmake_cache_string("MPIEXEC_NUMPROC_FLAG", "-n"))
         else:
             entries.append(cmake_cache_string("MPIEXEC_NUMPROC_FLAG", "-np"))
