@@ -79,6 +79,6 @@ class GenericBuilder(GenericBuilder):
         args.append("/p:PlatformToolset=%s" % self.pkg.compiler.cc_version)
         return args
 
-    def install(self, spec, prefix):
+    def install(self, pkg, spec, prefix):
         with working_dir(self.pkg.stage.build_directory, create=True):
             msbuild(*self.build_command_line())
