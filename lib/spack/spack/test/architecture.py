@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
 import platform
+import types
 
 import pytest
 
@@ -9,7 +10,9 @@ import spack.vendor.archspec.cpu
 
 import spack.concretize
 import spack.operating_systems
+import spack.operating_systems.mac_os
 import spack.platforms
+import spack.version
 from spack.spec import ArchSpec, Spec
 
 
@@ -77,6 +80,39 @@ def test_default_os_and_target(default_mock_concretization):
 def test_operating_system_conversion_to_dict():
     operating_system = spack.operating_systems.OperatingSystem("os", "1.0")
     assert operating_system.to_dict() == {"name": "os", "version": "1.0"}
+
+
+@pytest.mark.regression("52062")
+def test_darwin_setup_env_for_non_host_macos(monkeypatch):
+    """Source-building a spec whose os= is a different macOS than the
+    host (common after buildcache reuse) must not crash with KeyError
+    in Darwin.setup_platform_environment.
+    See https://github.com/spack/spack/issues/52062.
+    """
+    # Pretend the host is sequoia (macOS 15) so the test is cross-platform.
+    monkeypatch.setattr(
+        spack.operating_systems.mac_os,
+        "macos_version",
+        lambda: spack.version.StandardVersion.from_string("15"),
+    )
+
+    darwin = spack.platforms.Darwin()
+
+    class _FakeEnv:
+        def __init__(self):
+            self.vars = {}
+
+        def set(self, name, value):
+            self.vars[name] = value
+
+    pkg = types.SimpleNamespace(spec=types.SimpleNamespace(os="sonoma"))
+    env = _FakeEnv()
+
+    darwin.setup_platform_environment(pkg, env)
+
+    # Deployment target should reflect the spec's OS (macOS 14 = sonoma),
+    # not the host's (macOS 15 = sequoia).
+    assert env.vars["MACOSX_DEPLOYMENT_TARGET"] == "14.0"
 
 
 @pytest.mark.parametrize(
