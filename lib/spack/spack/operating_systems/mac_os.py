@@ -145,7 +145,10 @@ class MacOs(OperatingSystem):
             "26": "tahoe",
         }
 
-        version = version or macos_version()
+        if version is None:
+            version = macos_version()
+        else:
+            version = StandardVersion.from_string(str(version))
 
         # Big Sur versions go 11.0, 11.0.1, 11.1 (vs. prior versions that
         # only used the minor component)
